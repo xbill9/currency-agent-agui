@@ -28,7 +28,7 @@ services:
           "CMD",
           "python",
           "-c",
-          "import socket; socket.create_connection(('localhost', 8000), 2)",
+          "import socket; socket.create_connection(('localhost', 8008), 2)",
         ]
       interval: 5s
       timeout: 5s
@@ -40,7 +40,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile.app
     environment:
-      - AGENT_URL=http://agent:8000
+      - AGENT_URL=http://agent:8008
     depends_on:
       agent:
         condition: service_healthy

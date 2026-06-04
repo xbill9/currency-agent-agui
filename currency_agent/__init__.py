@@ -1,14 +1,17 @@
 import socket
 
 # Force IPv4-only to avoid connection hangs on IPv6 in sandbox environments
-_original_getaddrinfo = socket.getaddrinfo
+if not hasattr(socket, "_original_getaddrinfo"):
+    socket._original_getaddrinfo = socket.getaddrinfo
 
+    def _ipv4_only_getaddrinfo(*args, **kwargs):
+        return [
+            r
+            for r in socket._original_getaddrinfo(*args, **kwargs)
+            if r[0] == socket.AF_INET
+        ]
 
-def _ipv4_only_getaddrinfo(*args, **kwargs):
-    return [r for r in _original_getaddrinfo(*args, **kwargs) if r[0] == socket.AF_INET]
-
-
-socket.getaddrinfo = _ipv4_only_getaddrinfo
+    socket.getaddrinfo = _ipv4_only_getaddrinfo
 
 # Monkeypatch to fix ImportError: cannot import name 'GEN_AI_INPUT_MESSAGES' from 'opentelemetry'
 try:
@@ -47,17 +50,18 @@ except ImportError:
 try:
     import mcp
 
-    _original_client_session_init = mcp.ClientSession.__init__
+    if not hasattr(mcp.ClientSession, "_original_init"):
+        mcp.ClientSession._original_init = mcp.ClientSession.__init__
 
-    def _patched_client_session_init(self, *args, **kwargs):
-        import inspect
+        def _patched_client_session_init(self, *args, **kwargs):
+            import inspect
 
-        sig = inspect.signature(_original_client_session_init)
-        if "sampling_capabilities" not in sig.parameters:
-            kwargs.pop("sampling_capabilities", None)
-        return _original_client_session_init(self, *args, **kwargs)
+            sig = inspect.signature(mcp.ClientSession._original_init)
+            if "sampling_capabilities" not in sig.parameters:
+                kwargs.pop("sampling_capabilities", None)
+            return mcp.ClientSession._original_init(self, *args, **kwargs)
 
-    mcp.ClientSession.__init__ = _patched_client_session_init
+        mcp.ClientSession.__init__ = _patched_client_session_init
 except Exception:
     pass
 
@@ -65,17 +69,18 @@ except Exception:
 try:
     import mcp
 
-    _original_client_session_call_tool = mcp.ClientSession.call_tool
+    if not hasattr(mcp.ClientSession, "_original_call_tool"):
+        mcp.ClientSession._original_call_tool = mcp.ClientSession.call_tool
 
-    def _patched_client_session_call_tool(self, *args, **kwargs):
-        import inspect
+        def _patched_client_session_call_tool(self, *args, **kwargs):
+            import inspect
 
-        sig = inspect.signature(_original_client_session_call_tool)
-        if "meta" not in sig.parameters:
-            kwargs.pop("meta", None)
-        return _original_client_session_call_tool(self, *args, **kwargs)
+            sig = inspect.signature(mcp.ClientSession._original_call_tool)
+            if "meta" not in sig.parameters:
+                kwargs.pop("meta", None)
+            return mcp.ClientSession._original_call_tool(self, *args, **kwargs)
 
-    mcp.ClientSession.call_tool = _patched_client_session_call_tool
+        mcp.ClientSession.call_tool = _patched_client_session_call_tool
 except Exception:
     pass
 

@@ -9,25 +9,29 @@ export LOG_LEVEL ?= INFO
 export GENAI_MODEL ?= gemini-2.5-flash
 export MCP_SERVER_URL ?= http://127.0.0.1:8080/mcp
 
-.PHONY: help install mcp agent frontend test-client e2e-test adktest test frontend-test lint format clean start stop status deploy logs endpoint remote-status frontend-install frontend-build react-install react-ui react-agent
+.PHONY: help install mcp agent frontend test-client e2e-test adktest test frontend-test react-test test-agui lint format clean start stop status deploy logs endpoint remote-status frontend-install frontend-build react-install react-ui react-agent
 
 help:
 	@echo "Available commands:"
 	@echo "  install       - Install all project dependencies (including frontend and react UI)"
-	@echo "  start         - Start all services in background (MCP + Agent)"
-	@echo "  stop          - Stop all background services"
+	@echo "  start         - Start all services in background (MCP + Agent + AG-UI)"
+	@echo "  stop          - Stop all background services (including AG-UI)"
 	@echo "  status        - Check status of background services"
 	@echo "  mcp           - Start the MCP Server (foreground)"
 	@echo "  agent         - Start the A2A Agent Server (foreground)"
 	@echo "  frontend      - Build and start the FastAPI + Vanilla TS frontend server (port 8000)"
+	@echo "  frontend-install - Install dependencies for FastAPI + Vanilla TS frontend"
+	@echo "  frontend-build - Build Vanilla TS frontend assets"
 	@echo "  react-install - Install dependencies for React + CopilotKit UI"
 	@echo "  react-ui      - Start React Frontend UI (port 3000)"
-	@echo "  react-agent   - Start React Frontend Agent (port 8000)"
+	@echo "  react-agent   - Start React Frontend Agent (port 8008)"
 	@echo "  test-client   - Run the A2A Client (test queries)"
 	@echo "  e2e-test      - Run end-to-end tests (alias for test-client)"
 	@echo "  adktest       - Run interactive ADK CLI for the agent"
 	@echo "  test          - Run all tests (pytest)"
 	@echo "  frontend-test - Run frontend specific tests"
+	@echo "  react-test    - Run end-to-end tests on React UI and React Agent"
+	@echo "  test-agui     - Run AG-UI CopilotKit Validator (validate_agui.py)"
 	@echo "  lint          - Run linting checks (ruff)"
 	@echo "  format        - Auto-format code (ruff)"
 	@echo "  clean         - Remove caches and logs"
@@ -49,13 +53,20 @@ start:
 	@sleep 2
 	@echo "Starting A2A Agent Server in background..."
 	@nohup uv run uvicorn currency_agent.agent:a2a_app --host 127.0.0.1 --port 10000 > agent.log 2>&1 &
-	@echo "Services started. Logs: mcp.log, agent.log"
+	@echo "Starting AG-UI React Frontend UI in background..."
+	@cd frontend-react && nohup npm run dev:ui > ../react-ui.log 2>&1 &
+	@echo "Starting AG-UI React Frontend Agent in background..."
+	@cd frontend-react && nohup npm run dev:agent > ../react-agent.log 2>&1 &
+	@echo "Services started. Logs: mcp.log, agent.log, react-ui.log, react-agent.log"
 
 stop:
 	@echo "Stopping servers..."
 	@pgrep -f "mcp-server/server.py" | grep -v "$$$$" | xargs kill -9 2>/dev/null || true
 	@pgrep -f "uvicorn currency_agent.agent:a2a_app" | grep -v "$$$$" | xargs kill -9 2>/dev/null || true
 	@pgrep -f "frontend/main.py" | grep -v "$$$$" | xargs kill -9 2>/dev/null || true
+	@pgrep -f "$(CURDIR)/frontend-react" | grep -v "$$$$" | xargs kill -9 2>/dev/null || true
+	@pkill -9 -f "next-server" 2>/dev/null || true
+	@pkill -9 -f "next dev" 2>/dev/null || true
 	@sleep 1
 
 status:
@@ -96,6 +107,30 @@ status:
 	else \
 		echo "  Frontend Server:  Stopped"; \
 	fi
+	@PID_REACT_AGENT=$$(ps aux | grep "$(CURDIR)/frontend-react/agent" | grep -v "grep" | awk '{print $$2}' | tr '\n' ' '); \
+	if [ -n "$$PID_REACT_AGENT" ]; then \
+		PIDS=$$(echo "$$PID_REACT_AGENT" | tr ' ' ','); \
+		PORTS=$$(lsof -i -P -n -a -p "$$PIDS" 2>/dev/null | grep LISTEN | awk '{print $$9}' | awk -F: '{print $$NF}' | sort -u | tr '\n' ' ' | sed 's/ *$$//'); \
+		if [ -n "$$PORTS" ]; then \
+			echo "  AG-UI Agent:      Running (PID $$PID_REACT_AGENT) on port(s): $$PORTS"; \
+		else \
+			echo "  AG-UI Agent:      Running (PID $$PID_REACT_AGENT)"; \
+		fi; \
+	else \
+		echo "  AG-UI Agent:      Stopped"; \
+	fi
+	@PID_REACT_UI=$$(ps aux | grep "$(CURDIR)/frontend-react" | grep -v "frontend-react/agent" | grep -v "grep" | awk '{print $$2}' | tr '\n' ' '); \
+	if [ -n "$$PID_REACT_UI" ]; then \
+		PIDS=$$(echo "$$PID_REACT_UI" | tr ' ' ','); \
+		PORTS=$$(lsof -i -P -n -a -p "$$PIDS" 2>/dev/null | grep LISTEN | awk '{print $$9}' | awk -F: '{print $$NF}' | sort -u | tr '\n' ' ' | sed 's/ *$$//'); \
+		if [ -n "$$PORTS" ]; then \
+			echo "  AG-UI React UI:   Running (PID $$PID_REACT_UI) on port(s): $$PORTS"; \
+		else \
+			echo "  AG-UI React UI:   Running (PID $$PID_REACT_UI)"; \
+		fi; \
+	else \
+		echo "  AG-UI React UI:   Stopped"; \
+	fi
 
 
 
@@ -131,6 +166,17 @@ frontend-build:
 frontend-test:
 	@echo "Running frontend tests..."
 	@PYTHONPATH=frontend uv run pytest frontend/tests
+
+react-test:
+	@echo "Running React UI & Agent E2E tests..."
+	-$(MAKE) stop
+	$(MAKE) start
+	-uv run python3 frontend-react/scripts/test_react_e2e.py
+	$(MAKE) stop
+
+test-agui:
+	@echo "Running AG-UI CopilotKit Validator..."
+	uv run python3 frontend-react/scripts/validate_agui.py
 
 test-client:
 	@echo "Running A2A Client tests..."
@@ -188,6 +234,6 @@ react-ui:
 	cd frontend-react && npm run dev:ui
 
 react-agent:
-	@echo "Starting React Frontend Agent (port 8000)..."
+	@echo "Starting React Frontend Agent (port 8008)..."
 	cd frontend-react && npm run dev:agent
 

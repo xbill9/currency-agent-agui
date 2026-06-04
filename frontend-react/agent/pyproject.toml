@@ -1,7 +1,7 @@
 [project]
-name = "proverbs-agent"
+name = "currency-agent"
 version = "0.1.0"
-description = "ADK Proverbs Agent with shared state"
+description = "ADK Currency Agent with AG-UI support"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi",
@@ -11,4 +11,7 @@ dependencies = [
   "google-adk",
   "google-genai",
   "ag-ui-adk",
+  "a2ui-agent-sdk>=0.2.1",
+  "a2a-sdk==0.3.3",
+  "mcp>=1.2.0",
 ]

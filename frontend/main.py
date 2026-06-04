@@ -1,14 +1,17 @@
 import socket
 
 # Force IPv4-only to avoid connection hangs on IPv6 in sandbox environments
-_original_getaddrinfo = socket.getaddrinfo
+if not hasattr(socket, "_original_getaddrinfo"):
+    socket._original_getaddrinfo = socket.getaddrinfo
 
+    def _ipv4_only_getaddrinfo(*args, **kwargs):
+        return [
+            r
+            for r in socket._original_getaddrinfo(*args, **kwargs)
+            if r[0] == socket.AF_INET
+        ]
 
-def _ipv4_only_getaddrinfo(*args, **kwargs):
-    return [r for r in _original_getaddrinfo(*args, **kwargs) if r[0] == socket.AF_INET]
-
-
-socket.getaddrinfo = _ipv4_only_getaddrinfo
+    socket.getaddrinfo = _ipv4_only_getaddrinfo
 
 # Monkeypatch to fix ImportError: cannot import name 'GEN_AI_INPUT_MESSAGES' from 'opentelemetry'
 try:
@@ -70,13 +73,11 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from a2a.client import A2ACardResolver, A2AClient
 from a2a.types import (
-    SendMessageRequest,
     MessageSendParams,
     SendStreamingMessageRequest,
     Message as A2AMessage,
     Part as A2APart,
     TextPart as A2ATextPart,
-    DataPart as A2ADataPart,
     Role as A2ARole,
 )
 
@@ -318,6 +319,7 @@ def cleanup_final_text(text: str) -> str:
 
     # Deduplicate exact <a2ui-json> blocks
     seen_a2ui = set()
+
     def deduplicate_a2ui(match):
         full_block = match.group(0)
         content = match.group(1).strip()
@@ -375,30 +377,33 @@ async def chat_stream(request: SimpleChatRequest):
             elif part_kind == "data":
                 data_content = getattr(inner_part, "data", None)
                 metadata = getattr(inner_part, "metadata", {}) or {}
-                parts_list.append({
-                    "inlineData": {
-                        "metadata": metadata,
-                        "data": data_content
-                    }
-                })
-                
+                parts_list.append(
+                    {"inlineData": {"metadata": metadata, "data": data_content}}
+                )
+
                 # Handle tool calls/responses as progress
                 adk_type = metadata.get("adk_type")
                 if adk_type == "function_call" and isinstance(data_content, dict):
                     tool_name = data_content.get("name", "tool")
-                    progress_yields.append({
-                        "type": "progress",
-                        "text": f"🛠️ Calling {tool_name}...",
-                    })
+                    progress_yields.append(
+                        {
+                            "type": "progress",
+                            "text": f"🛠️ Calling {tool_name}...",
+                        }
+                    )
                 elif adk_type == "function_response" and isinstance(data_content, dict):
                     tool_name = data_content.get("name", "tool")
-                    progress_yields.append({
-                        "type": "progress",
-                        "text": f"✅ {tool_name} returned rate data",
-                    })
+                    progress_yields.append(
+                        {
+                            "type": "progress",
+                            "text": f"✅ {tool_name} returned rate data",
+                        }
+                    )
         return parts_list, progress_yields
 
-    def parse_a2a_message(message_obj) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
+    def parse_a2a_message(
+        message_obj,
+    ) -> tuple[str, list[dict[str, Any]], list[dict[str, Any]]]:
         author = getattr(message_obj, "role", "agent")
         if hasattr(author, "value"):
             author = author.value
@@ -409,7 +414,7 @@ async def chat_stream(request: SimpleChatRequest):
     async def event_generator():
         final_text = ""
         logger.info(f"Starting A2A event generator for context {context_id}")
-        
+
         # Initial heartbeat
         yield (
             json.dumps(
@@ -426,6 +431,7 @@ async def chat_stream(request: SimpleChatRequest):
 
             # Construct the Message object
             import uuid
+
             msg_id = uuid.uuid4().hex
             parts = [A2APart(A2ATextPart(kind="text", text=request.message))]
             a2a_msg = A2AMessage(
@@ -434,7 +440,7 @@ async def chat_stream(request: SimpleChatRequest):
                 parts=parts,
                 context_id=context_id,
             )
-            
+
             params = MessageSendParams(message=a2a_msg)
             rpc_request = SendStreamingMessageRequest(
                 id=uuid.uuid4().hex,
@@ -445,7 +451,7 @@ async def chat_stream(request: SimpleChatRequest):
             async for chunk in a2a_client.send_message_streaming(rpc_request):
                 if not chunk or not chunk.root:
                     continue
-                
+
                 # Check for JSON-RPC error
                 if hasattr(chunk.root, "error") and chunk.root.error:
                     error_msg = chunk.root.error.message
@@ -465,19 +471,16 @@ async def chat_stream(request: SimpleChatRequest):
 
                 res = chunk.root.result
                 kind = getattr(res, "kind", None)
-                logger.info(f"A2A Chunk received. Kind: {kind}, Result Type: {type(res)}, Data: {res}")
+                logger.info(
+                    f"A2A Chunk received. Kind: {kind}, Result Type: {type(res)}, Data: {res}"
+                )
 
                 if kind == "message":
                     author, parts_list, prog_yields = parse_a2a_message(res)
                     for py in prog_yields:
                         yield json.dumps(py) + "\n"
 
-                    mapped_event = {
-                        "author": author,
-                        "content": {
-                            "parts": parts_list
-                        }
-                    }
+                    mapped_event = {"author": author, "content": {"parts": parts_list}}
 
                     event_text = "".join(extract_all_text(mapped_event))
                     if event_text:
@@ -496,7 +499,11 @@ async def chat_stream(request: SimpleChatRequest):
                 elif kind == "status-update":
                     # Status updates represent progress
                     status_obj = getattr(res, "status", None)
-                    status_state = getattr(status_obj, "state", "running") if status_obj else "running"
+                    status_state = (
+                        getattr(status_obj, "state", "running")
+                        if status_obj
+                        else "running"
+                    )
                     if hasattr(status_state, "value"):
                         status_state = status_state.value
                     yield (
@@ -510,17 +517,19 @@ async def chat_stream(request: SimpleChatRequest):
                     )
 
                     # Extract content parts if a nested message is present in the status
-                    status_message = getattr(status_obj, "message", None) if status_obj else None
+                    status_message = (
+                        getattr(status_obj, "message", None) if status_obj else None
+                    )
                     if status_message:
-                        author, parts_list, prog_yields = parse_a2a_message(status_message)
+                        author, parts_list, prog_yields = parse_a2a_message(
+                            status_message
+                        )
                         for py in prog_yields:
                             yield json.dumps(py) + "\n"
 
                         mapped_event = {
                             "author": author,
-                            "content": {
-                                "parts": parts_list
-                            }
+                            "content": {"parts": parts_list},
                         }
                         event_text = "".join(extract_all_text(mapped_event))
                         if event_text:
@@ -546,9 +555,7 @@ async def chat_stream(request: SimpleChatRequest):
 
                         mapped_event = {
                             "author": "agent",
-                            "content": {
-                                "parts": parts_list
-                            }
+                            "content": {"parts": parts_list},
                         }
                         event_text = "".join(extract_all_text(mapped_event))
                         if event_text:

@@ -1,5 +1,19 @@
 import logging
 import os
+import socket
+
+# Force IPv4-only to avoid connection hangs on IPv6 in sandbox environments
+if not hasattr(socket, "_original_getaddrinfo"):
+    socket._original_getaddrinfo = socket.getaddrinfo
+
+    def _ipv4_only_getaddrinfo(*args, **kwargs):
+        return [
+            r
+            for r in socket._original_getaddrinfo(*args, **kwargs)
+            if r[0] == socket.AF_INET
+        ]
+
+    socket.getaddrinfo = _ipv4_only_getaddrinfo
 
 from dotenv import load_dotenv
 from google.adk.agents import LlmAgent
@@ -7,6 +21,7 @@ from google.adk.a2a.utils.agent_to_a2a import to_a2a
 from google.adk.tools.mcp_tool import McpToolset, StreamableHTTPConnectionParams
 
 from starlette.responses import JSONResponse
+
 
 # A2UI imports
 from a2ui.schema.manager import A2uiSchemaManager
@@ -34,8 +49,8 @@ schema_manager = A2uiSchemaManager(
         BasicCatalog.get_config("0.9"),
         CatalogConfig.from_path(
             name="currency-charts",
-            catalog_path=os.path.join(os.path.dirname(__file__), "custom_catalog.json")
-        )
+            catalog_path=os.path.join(os.path.dirname(__file__), "custom_catalog.json"),
+        ),
     ],
 )
 selected_catalog = schema_manager.get_selected_catalog()
@@ -96,18 +111,17 @@ from google.adk.a2a.utils.agent_card_builder import AgentCardBuilder
 from a2a.types import AgentCapabilities
 
 # Monkeypatch AgentCardBuilder to always enable streaming capability
-_original_init = AgentCardBuilder.__init__
+if not hasattr(AgentCardBuilder, "_original_init"):
+    AgentCardBuilder._original_init = AgentCardBuilder.__init__
 
+    def _patched_init(self, *args, **kwargs):
+        if "capabilities" not in kwargs or kwargs["capabilities"] is None:
+            kwargs["capabilities"] = AgentCapabilities(streaming=True)
+        else:
+            kwargs["capabilities"].streaming = True
+        AgentCardBuilder._original_init(self, *args, **kwargs)
 
-def _patched_init(self, *args, **kwargs):
-    if "capabilities" not in kwargs or kwargs["capabilities"] is None:
-        kwargs["capabilities"] = AgentCapabilities(streaming=True)
-    else:
-        kwargs["capabilities"].streaming = True
-    _original_init(self, *args, **kwargs)
-
-
-AgentCardBuilder.__init__ = _patched_init
+    AgentCardBuilder.__init__ = _patched_init
 
 a2a_app = to_a2a(
     root_agent,

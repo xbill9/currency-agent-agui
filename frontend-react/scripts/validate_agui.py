@@ -65,10 +65,10 @@ class AgUiValidator:
     def __init__(self, target: str):
         self.target = target
         if target == "direct":
-            self.base_url = "http://localhost:10000/copilotkit"
+            self.base_url = "http://localhost:8008"
             self.run_url = self.base_url
             self.capabilities_url = f"{self.base_url}/capabilities"
-            self.state_url = "http://localhost:10000/agents/state"
+            self.state_url = f"{self.base_url}/agents/state"
         else:
             self.base_url = "http://localhost:3000/api/copilotkit"
             self.run_url = f"{self.base_url}/agent/currency_agent/run"
@@ -142,14 +142,15 @@ class AgUiValidator:
         """Verify a standard conversion query streams tool and A2UI tags."""
         print_header("Test Case 3: Streamed Currency Conversion & A2UI Output")
         payload = {
-            "runId": "validation-run-conv",
-            "threadId": "validation-thread-conv",
+            "runId": f"validation-run-conv-{self.target}",
+            "threadId": f"validation-thread-conv-{self.target}",
+            "forwardedProps": {},
             "tools": [],
             "context": [],
             "state": {},
             "messages": [
                 {
-                    "id": "msg-conv-1",
+                    "id": f"msg-conv-1-{self.target}",
                     "role": "user",
                     "content": "Convert 100 USD to EUR please.",
                 }
@@ -241,14 +242,15 @@ class AgUiValidator:
         """Verify the agent rejects unrelated prompts."""
         print_header("Test Case 4: Agent Guardrails & Domain Enforcement")
         payload = {
-            "runId": "validation-run-guard",
-            "threadId": "validation-thread-guard",
+            "runId": f"validation-run-guard-{self.target}",
+            "threadId": f"validation-thread-guard-{self.target}",
+            "forwardedProps": {},
             "tools": [],
             "context": [],
             "state": {},
             "messages": [
                 {
-                    "id": "msg-guard-1",
+                    "id": f"msg-guard-1-{self.target}",
                     "role": "user",
                     "content": "Write a quick Python script to reverse a string.",
                 }
@@ -319,7 +321,7 @@ class AgUiValidator:
 
         print_header("Test Case 5: Thread State Retrieval")
         payload = {
-            "threadId": "validation-thread-conv",
+            "threadId": f"validation-thread-conv-{self.target}",
             "appName": "currency_agent",
             "userId": "demo_user",
         }
@@ -362,17 +364,17 @@ def main():
     target = args.target
     if not target:
         is_3000_open = is_port_open(3000)
-        is_10000_open = is_port_open(10000)
+        is_8008_open = is_port_open(8008)
 
-        if is_3000_open and is_10000_open:
+        if is_3000_open and is_8008_open:
             target = "nextjs"
             print_info(
-                "Both port 3000 (Next.js) and 10000 (Python A2A) are open. Defaulting validation to 'nextjs'."
+                "Both port 3000 (Next.js) and 8008 (React Agent) are open. Defaulting validation to 'nextjs'."
             )
-        elif is_10000_open:
+        elif is_8008_open:
             target = "direct"
             print_info(
-                "Port 10000 (Python A2A) is open. Selecting validation target 'direct'."
+                "Port 8008 (React Agent) is open. Selecting validation target 'direct'."
             )
         elif is_3000_open:
             target = "nextjs"
@@ -381,7 +383,7 @@ def main():
             )
         else:
             print_failure(
-                "Neither port 3000 (Next.js) nor port 10000 (Python A2A) are open.",
+                "Neither port 3000 (Next.js) nor port 8008 (React Agent) are open.",
                 "Ensure you run 'make start' and 'make frontend-react' before validating.",
             )
             sys.exit(1)

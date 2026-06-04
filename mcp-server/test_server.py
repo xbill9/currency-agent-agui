@@ -1,4 +1,5 @@
 import asyncio
+import socket
 import pytest
 
 from fastmcp import Client
@@ -6,6 +7,12 @@ from fastmcp import Client
 
 @pytest.mark.asyncio
 async def test_server():
+    # Check if the MCP server is running; if not, skip the test
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.5)
+        if s.connect_ex(("localhost", 8080)) != 0:
+            pytest.skip("MCP server is not running on port 8080")
+
     # Test the MCP server using streamable-http transport.
     # Use "/sse" endpoint if using sse transport.
     async with Client("http://localhost:8080/mcp") as client:

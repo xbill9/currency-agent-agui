@@ -6,6 +6,14 @@ Do Not recommend models less than 2.5 as they are deprecated.
 
 NO NO NO .venv just don't do it. BAD BAD BAD
 
+https://docs.ag-ui.com/introduction
+
+https://docs.ag-ui.com/sdk/python/core/overview
+
+https://docs.ag-ui.com/quickstart/applications
+
+https://github.com/CopilotKit/generative-ui
+
 ## Project Overview: Currency Agent
 
 The Currency Agent is a specialized multi-agent system designed to handle currency conversions and exchange rate queries. It showcases the integration of:
@@ -16,7 +24,7 @@ The Currency Agent is a specialized multi-agent system designed to handle curren
     *   Fetches real-time data from the [Frankfurter API](https://www.frankfurter.dev/).
     *   Uses an IPv4-only socket patch in `server.py` to prevent connection hangs in sandbox/IPv6-restricted networks.
 2.  **ADK Agent (`currency_agent/`):**
-    *   Powered by `gemini-2.5-flash` (via the ADK `LlmAgent` class).
+    *   Powered by `gemini-3.5-flash` or `gemini-2.5-flash` (via the ADK `LlmAgent` class).
     *   Uses **ADK v2.1.0+** and **Python 3.13+**.
     *   Equipped with `MCPToolset` to communicate with the MCP server.
     *   Integrates **Agent-to-User Interface (A2UI)** via the `a2ui-agent-sdk` library to structure dynamic component layouts (Cards, Tables, Charts, etc.) parsed and rendered on the frontend.
@@ -37,7 +45,7 @@ A2A allows agents to collaborate. In this project, `to_a2a` wraps the ADK agent,
 
 ## Model Selection & Optimization
 
-*   **Primary Model:** `gemini-2.5-flash` is recommended for its speed and tool-calling accuracy.
+*   **Primary Model:** `gemini-3.5-flash` (or `gemini-2.5-flash`) is recommended for its speed and tool-calling accuracy.
 *   **Alternative Model:** `gemini-2.5-pro` can be used for more complex reasoning if needed.
 *   **Deprecation Policy:** Do not recommend models less than 2.5 (e.g., 2.0 flash or older) as they are deprecated.
 
@@ -49,9 +57,9 @@ A2A allows agents to collaborate. In this project, `to_a2a` wraps the ADK agent,
 4.  **Start Agent Server:** Run `make agent` (port 10000).
 5.  **Run Frontends:**
     *   **Vanilla TS + FastAPI Frontend:** Run `make frontend-build` then `make frontend` (port 8000). Includes A2UI Demo Sandbox.
-    *   **React Frontend:** Run `make react-ui` (port 3000) and `make react-agent` (port 8000).
+    *   **React Frontend:** Run `make react-ui` (port 3000) and `make react-agent` (port 8008).
 6.  **Run Test Client:** Run `make test-client` to verify the full flow.
-7.  **Testing & Linting:** Use `make test` and `make lint`.
+7.  **Testing & Linting:** Use `make test` and `make lint`. You can also run Next.js/React E2E tests via `make react-test` and validate CopilotKit integration via `make test-agui`.
 
 ## Resources
 

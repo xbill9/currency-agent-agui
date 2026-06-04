@@ -123,6 +123,12 @@ echo "GOOGLE_GENAI_USE_VERTEXAI=TRUE" >> .env \
 
 </details>
 
+> [!NOTE]
+> By default, the agent uses `gemini-2.5-flash`. You can configure the agent to use `gemini-3.5-flash` (or another supported model) by defining `GENAI_MODEL` in your `.env` file:
+> ```sh
+> GENAI_MODEL="gemini-3.5-flash"
+> ```
+
 Now you are ready for the fun to begin!
 
 ## Local Deployment
@@ -131,13 +137,13 @@ You can manage all services using the provided `Makefile`.
 
 ### Start all services
 
-To start the MCP Server and the A2A Agent in the background:
+To start the MCP Server, the A2A Agent, and the React UI / Agent services in the background:
 
 ```bash
 make start
 ```
 
-This will redirect output to `mcp.log` and `agent.log`.
+This will redirect output to `mcp.log`, `agent.log`, `react-ui.log`, and `react-agent.log`.
 
 ### Check status
 
@@ -208,7 +214,7 @@ An alternative, modern React UI featuring CopilotKit integration for agent-suppo
   ```bash
   make react-agent
   ```
-  This launches the FastAPI/Uvicorn backend handler at `http://localhost:8000`.
+  This launches the FastAPI/Uvicorn backend handler at `http://localhost:8008`.
 
 ### A2A Client (CLI Test tool)
 
@@ -218,6 +224,27 @@ Once the servers are running, you can run command-line test queries against the 
 make test-client
 # or: uv run currency_agent/test_client.py
 ```
+
+### Testing & Validation
+
+You can run automated tests and validations on the agent integration and frontend applications:
+
+- **Run all backend tests:**
+  ```bash
+  make test
+  ```
+- **Run Vanilla TS frontend tests:**
+  ```bash
+  make frontend-test
+  ```
+- **Run React UI + Agent E2E integration tests:**
+  ```bash
+  make react-test
+  ```
+- **Validate AG-UI CopilotKit schemas and capabilities:**
+  ```bash
+  make test-agui
+  ```
 
 ## 🤝 Contributing
 

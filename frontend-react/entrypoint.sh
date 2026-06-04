@@ -14,10 +14,10 @@ else
   echo "[entrypoint] GOOGLE_API_KEY: set (${#GOOGLE_API_KEY} chars)"
 fi
 
-# Start Python agent on port 8000 (override PORT which Railway sets to 3000)
-echo "[entrypoint] Starting ADK agent on port 8000..."
+# Start Python agent on port 8008 (override PORT which Railway sets to 3000)
+echo "[entrypoint] Starting ADK agent on port 8008..."
 cd /app/agent
-PORT=8000 python main.py 2>&1 | sed 's/^/[agent] /' &
+PORT=8008 python main.py 2>&1 | sed 's/^/[agent] /' &
 AGENT_PID=$!
 cd /app
 

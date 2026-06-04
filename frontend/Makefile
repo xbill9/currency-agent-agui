@@ -17,18 +17,20 @@ SERVICE_URL ?= $(shell gcloud run services describe $(SERVICE_NAME) --region $(R
 AGENT_NAME ?= $(SERVICE_NAME)
 TOPIC ?= The impact of AI on software engineering
 
-.PHONY: install build-frontend run start stop lint format test check clean help deploy endpoint status check-env a2a test-invoke test-local
+.PHONY: install build-frontend frontend run start stop lint format test test-app check clean help deploy endpoint status check-env a2a test-invoke test-local
 
 help:
 	@echo "Available commands:"
 	@echo "  install          - Install Python and Frontend dependencies"
 	@echo "  build-frontend   - Build the frontend (Vite) to dist/"
+	@echo "  frontend         - Alias for build-frontend"
 	@echo "  run              - Start the FastAPI web app locally"
 	@echo "  start            - Start the web app in background"
 	@echo "  stop             - Stop the local web app"
 	@echo "  lint             - Run ruff to check for linting issues"
 	@echo "  format           - Run ruff format and fix"
 	@echo "  test             - Run all project tests from the root directory"
+	@echo "  test-app         - Run only frontend backend tests (pytest tests/)"
 	@echo "  check            - Run lint and test"
 	@echo "  clean            - Remove temporary files, caches, and build artifacts"
 	@echo "  deploy           - Deploy the web app to Cloud Run"

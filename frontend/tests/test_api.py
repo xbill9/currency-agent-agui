@@ -19,9 +19,7 @@ def test_health_endpoint(client):
 
 @patch.dict(os.environ, {"AGENT_SERVER_URL": "http://fake-server"})
 @patch("main.get_a2a_client", new_callable=AsyncMock)
-def test_chat_stream_missing_config(
-    mock_get_a2a, client
-):
+def test_chat_stream_missing_config(mock_get_a2a, client):
     # Temporarily remove AGENT_SERVER_URL from env for this test
     with patch.dict(os.environ, {}, clear=True):
         import main
@@ -71,9 +69,7 @@ def test_chat_stream_success(mock_get_a2a_client, client):
         )
         yield SendStreamingMessageResponse(
             root=SendStreamingMessageSuccessResponse(
-                id="req1",
-                jsonrpc="2.0",
-                result=status_event
+                id="req1", jsonrpc="2.0", result=status_event
             )
         )
 
@@ -85,9 +81,7 @@ def test_chat_stream_success(mock_get_a2a_client, client):
         )
         yield SendStreamingMessageResponse(
             root=SendStreamingMessageSuccessResponse(
-                id="req2",
-                jsonrpc="2.0",
-                result=msg
+                id="req2", jsonrpc="2.0", result=msg
             )
         )
 
@@ -99,9 +93,7 @@ def test_chat_stream_success(mock_get_a2a_client, client):
         )
         yield SendStreamingMessageResponse(
             root=SendStreamingMessageSuccessResponse(
-                id="req3",
-                jsonrpc="2.0",
-                result=msg2
+                id="req3", jsonrpc="2.0", result=msg2
             )
         )
 

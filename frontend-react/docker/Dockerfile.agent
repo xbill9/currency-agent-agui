@@ -11,6 +11,6 @@ COPY main.py ./
 
 RUN uv sync
 
-EXPOSE 8000
+EXPOSE 8008
 
 CMD ["uv", "run", "python", "main.py"]
