@@ -64,17 +64,76 @@ stop:
 	@pgrep -f "mcp-server/server.py" | grep -v "$$$$" | xargs kill -9 2>/dev/null || true
 	@pgrep -f "uvicorn currency_agent.agent:a2a_app" | grep -v "$$$$" | xargs kill -9 2>/dev/null || true
 	@pgrep -f "frontend/main.py" | grep -v "$$$$" | xargs kill -9 2>/dev/null || true
-	@pgrep -f "$(CURDIR)/frontend-react" | grep -v "$$$$" | xargs kill -9 2>/dev/null || true
-	@pkill -9 -f "next-server" 2>/dev/null || true
-	@pkill -9 -f "next dev" 2>/dev/null || true
+	@pgrep -f "frontend-react/agent" | grep -v "$$$$" | xargs kill -9 2>/dev/null || true
+	@pgrep -f "dev:ui|dev:agent" | grep -v "$$$$" | xargs kill -9 2>/dev/null || true
+	@pkill -9 "next-server" 2>/dev/null || true
+	@pgrep -f "next dev" | grep -v "$$$$" | xargs kill -9 2>/dev/null || true
 	@sleep 1
 
 status:
 	@echo "Checking status of background services..."
-	@PID_MCP=$$(pgrep -f "[m]cp-server/server.py" | tr '\n' ' '); \
+	@get_ports() { \
+		local pids="$$1"; \
+		local all_pids=""; \
+		local queue="$$pids"; \
+		while [ -n "$$queue" ]; do \
+			local next_queue=""; \
+			for p in $$queue; do \
+				all_pids="$$all_pids $$p"; \
+				local children; \
+				children=$$(pgrep -P "$$p" 2>/dev/null); \
+				if [ -n "$$children" ]; then \
+					next_queue="$$next_queue $$children"; \
+				fi; \
+			done; \
+			queue="$$next_queue"; \
+		done; \
+		local inodes=""; \
+		for p in $$all_pids; do \
+			if [ -d "/proc/$$p/fd" ]; then \
+				local p_inodes; \
+				p_inodes=$$(ls -l "/proc/$$p/fd" 2>/dev/null | grep socket | sed -n 's/.*socket:\[\([0-9]*\)\]/\1/p'); \
+				if [ -n "$$p_inodes" ]; then \
+					inodes="$$inodes $$p_inodes"; \
+				fi; \
+			fi; \
+		done; \
+		local ports=""; \
+		if [ -n "$$inodes" ]; then \
+			inodes=$$(echo "$$inodes" | tr '\n' ' ' | tr -s ' '); \
+			local pattern; \
+			pattern=$$(echo "$$inodes" | tr ' ' '|' | sed 's/^|//;s/|$$//'); \
+			ports=$$(awk -v inodes_raw="$$pattern" ' \
+				function hex2dec(h,    i, x, d, c) { \
+					h = tolower(h); \
+					d = 0; \
+					for (i = 1; i <= length(h); i++) { \
+						c = substr(h, i, 1); \
+						x = index("0123456789abcdef", c) - 1; \
+						if (x < 0) return 0; \
+						d = d * 16 + x; \
+					} \
+					return d; \
+				} \
+				BEGIN { \
+					inodes_pattern = "^(" inodes_raw ")$"; \
+				} \
+				NR > 1 { \
+					split($$2, addr, ":"); \
+					hex_port = addr[2]; \
+					state = $$4; \
+					inode = $$10; \
+					if (state == "0A" && inode ~ inodes_pattern) { \
+						print hex2dec(hex_port); \
+					} \
+				} \
+			' /proc/net/tcp /proc/net/tcp6 2>/dev/null | sort -n -u | tr '\n' ' ' | sed 's/ *$$//'); \
+		fi; \
+		echo "$$ports"; \
+	}; \
+	PID_MCP=$$(pgrep -f "[m]cp-server/server.py" | tr '\n' ' '); \
 	if [ -n "$$PID_MCP" ]; then \
-		PIDS=$$(echo "$$PID_MCP" | tr ' ' ','); \
-		PORTS=$$(lsof -i -P -n -a -p "$$PIDS" 2>/dev/null | grep LISTEN | awk '{print $$9}' | awk -F: '{print $$NF}' | sort -u | tr '\n' ' ' | sed 's/ *$$//'); \
+		PORTS=$$(get_ports "$$PID_MCP"); \
 		if [ -n "$$PORTS" ]; then \
 			echo "  MCP Server:       Running (PID $$PID_MCP) on port(s): $$PORTS"; \
 		else \
@@ -82,11 +141,10 @@ status:
 		fi; \
 	else \
 		echo "  MCP Server:       Stopped"; \
-	fi
-	@PID_AGENT=$$(pgrep -f "[u]vicorn currency_agent.agent:a2a_app" | tr '\n' ' '); \
+	fi; \
+	PID_AGENT=$$(pgrep -f "[u]vicorn currency_agent.agent:a2a_app" | tr '\n' ' '); \
 	if [ -n "$$PID_AGENT" ]; then \
-		PIDS=$$(echo "$$PID_AGENT" | tr ' ' ','); \
-		PORTS=$$(lsof -i -P -n -a -p "$$PIDS" 2>/dev/null | grep LISTEN | awk '{print $$9}' | awk -F: '{print $$NF}' | sort -u | tr '\n' ' ' | sed 's/ *$$//'); \
+		PORTS=$$(get_ports "$$PID_AGENT"); \
 		if [ -n "$$PORTS" ]; then \
 			echo "  A2A Agent Server: Running (PID $$PID_AGENT) on port(s): $$PORTS"; \
 		else \
@@ -94,11 +152,10 @@ status:
 		fi; \
 	else \
 		echo "  A2A Agent Server: Stopped"; \
-	fi
-	@PID_FRONTEND=$$(pgrep -f "[f]rontend/main.py" | tr '\n' ' '); \
+	fi; \
+	PID_FRONTEND=$$(pgrep -f "[f]rontend/main.py" | tr '\n' ' '); \
 	if [ -n "$$PID_FRONTEND" ]; then \
-		PIDS=$$(echo "$$PID_FRONTEND" | tr ' ' ','); \
-		PORTS=$$(lsof -i -P -n -a -p "$$PIDS" 2>/dev/null | grep LISTEN | awk '{print $$9}' | awk -F: '{print $$NF}' | sort -u | tr '\n' ' ' | sed 's/ *$$//'); \
+		PORTS=$$(get_ports "$$PID_FRONTEND"); \
 		if [ -n "$$PORTS" ]; then \
 			echo "  Frontend Server:  Running (PID $$PID_FRONTEND) on port(s): $$PORTS"; \
 		else \
@@ -106,11 +163,10 @@ status:
 		fi; \
 	else \
 		echo "  Frontend Server:  Stopped"; \
-	fi
-	@PID_REACT_AGENT=$$(ps aux | grep "$(CURDIR)/frontend-react/agent" | grep -v "grep" | awk '{print $$2}' | tr '\n' ' '); \
+	fi; \
+	PID_REACT_AGENT=$$(ps aux | grep "$(CURDIR)/frontend-react/agent" | grep -v "grep" | awk '{print $$2}' | tr '\n' ' '); \
 	if [ -n "$$PID_REACT_AGENT" ]; then \
-		PIDS=$$(echo "$$PID_REACT_AGENT" | tr ' ' ','); \
-		PORTS=$$(lsof -i -P -n -a -p "$$PIDS" 2>/dev/null | grep LISTEN | awk '{print $$9}' | awk -F: '{print $$NF}' | sort -u | tr '\n' ' ' | sed 's/ *$$//'); \
+		PORTS=$$(get_ports "$$PID_REACT_AGENT"); \
 		if [ -n "$$PORTS" ]; then \
 			echo "  AG-UI Agent:      Running (PID $$PID_REACT_AGENT) on port(s): $$PORTS"; \
 		else \
@@ -118,11 +174,10 @@ status:
 		fi; \
 	else \
 		echo "  AG-UI Agent:      Stopped"; \
-	fi
-	@PID_REACT_UI=$$(ps aux | grep "$(CURDIR)/frontend-react" | grep -v "frontend-react/agent" | grep -v "grep" | awk '{print $$2}' | tr '\n' ' '); \
+	fi; \
+	PID_REACT_UI=$$(ps aux | grep "$(CURDIR)/frontend-react" | grep -v "frontend-react/agent" | grep -v "grep" | awk '{print $$2}' | tr '\n' ' '); \
 	if [ -n "$$PID_REACT_UI" ]; then \
-		PIDS=$$(echo "$$PID_REACT_UI" | tr ' ' ','); \
-		PORTS=$$(lsof -i -P -n -a -p "$$PIDS" 2>/dev/null | grep LISTEN | awk '{print $$9}' | awk -F: '{print $$NF}' | sort -u | tr '\n' ' ' | sed 's/ *$$//'); \
+		PORTS=$$(get_ports "$$PID_REACT_UI"); \
 		if [ -n "$$PORTS" ]; then \
 			echo "  AG-UI React UI:   Running (PID $$PID_REACT_UI) on port(s): $$PORTS"; \
 		else \

@@ -16,12 +16,12 @@ To see these exact A2UI cards render live in the actual web workspace without ne
 
 ### Key Additions
 1. **Frontend HTML Sandbox**:
-   Added a new section **A2UI Demo Sandbox** to [index.html](file:///home/xbill/currency-agent/frontend/frontend/index.html) with two mockup launcher buttons:
+   Added a new section **A2UI Demo Sandbox** to [index.html](file:///home/xbill/currency-agent-agui/frontend/frontend/index.html) with two mockup launcher buttons:
    - **Demo 1: A2UI Conversion Card**
    - **Demo 2: A2UI Rates Table**
 
 2. **Sandbox Interaction Handlers**:
-   Added event listeners in [app.ts](file:///home/xbill/currency-agent/frontend/frontend/app.ts) that inject simulated user requests and complete `<a2ui-json>` agent responses into the chat window. The workspace UI automatically parses and renders these responses using its native `renderA2UI` system.
+   Added event listeners in [app.ts](file:///home/xbill/currency-agent-agui/frontend/frontend/app.ts) that inject simulated user requests and complete `<a2ui-json>` agent responses into the chat window. The workspace UI automatically parses and renders these responses using its native `renderA2UI` system.
 
 ### How to run the Demo
 1. Run the frontend build:

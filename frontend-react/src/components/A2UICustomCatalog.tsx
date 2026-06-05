@@ -57,12 +57,20 @@ const customCatalogDefinitions = {
       color: z.string().optional(),
     }),
   },
+  Button: {
+    description: "A clickable button element that triggers actions",
+    props: z.object({
+      child: z.string().optional(),
+      primary: z.boolean().optional(),
+      action: z.any().optional(),
+    }),
+  },
 };
 
 const customCatalogRenderers = {
   Card: ({ props, children }: any) => {
     return (
-      <div className="bg-slate-800/90 border border-slate-700/80 rounded-xl p-4 my-2 shadow-xl text-white w-full">
+      <div className="bg-slate-800/90 border border-slate-700/80 rounded-xl p-4 my-2 shadow-xl text-white w-full animate-fade-in opacity-0">
         {props.title && (
           <h4 className="text-sm font-bold border-b border-slate-700/50 pb-2 mb-3 tracking-wide flex items-center gap-2">
             {props.title}
@@ -111,11 +119,31 @@ const customCatalogRenderers = {
       </div>
     );
   },
+  Button: ({ props, children }: any) => {
+    const handleClick = () => {
+      if (props.action) {
+        const event = new CustomEvent("a2ui-action", { detail: props.action });
+        window.dispatchEvent(event);
+      }
+    };
+    return (
+      <button
+        onClick={handleClick}
+        className={`px-4 py-2 rounded-xl text-xs font-semibold tracking-wide transition-all duration-200 cursor-pointer ${
+          props.primary
+            ? "bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/20"
+            : "bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600"
+        }`}
+      >
+        {props.child ? children(props.child) : "Click here"}
+      </button>
+    );
+  },
   Table: ({ props }: any) => {
     const headers = props.headers || [];
     const rows = props.rows || [];
     return (
-      <div className="bg-slate-900 border border-slate-700/50 rounded-xl p-2 my-2 overflow-x-auto w-full">
+      <div className="bg-slate-900 border border-slate-700/50 rounded-xl p-2 my-2 overflow-x-auto w-full animate-fade-in opacity-0">
         <table className="w-full text-xs text-left border-collapse">
           {headers.length > 0 && (
             <thead>
@@ -169,7 +197,7 @@ const customCatalogRenderers = {
                     height: `${heightPercent}%`,
                     backgroundColor: color,
                   }}
-                  className="w-5 rounded-t transition-all duration-500 ease-out"
+                  className="w-5 rounded-t transition-all duration-500 ease-out animate-grow-up"
                   title={`${val}`}
                 />
                 <span className="text-[10px] text-slate-400">{label}</span>
@@ -246,7 +274,7 @@ const customCatalogRenderers = {
             );
           })}
 
-          <path d={areaD} fill={`url(#${gradId})`} />
+          <path d={areaD} fill={`url(#${gradId})`} className="animate-fade-in opacity-0" style={{ animationDelay: '1.2s' }} />
 
           <path
             d={lineD}
@@ -255,10 +283,11 @@ const customCatalogRenderers = {
             fill="none"
             strokeLinecap="round"
             strokeLinejoin="round"
+            className="animate-draw-path"
           />
 
           {points.map((p, idx) => (
-            <g key={idx}>
+            <g key={idx} className="animate-fade-in opacity-0" style={{ animationDelay: `${0.8 + idx * 0.15}s` }}>
               <circle
                 cx={p.x}
                 cy={p.y}

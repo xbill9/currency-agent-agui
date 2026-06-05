@@ -63,7 +63,8 @@ SYSTEM_INSTRUCTION = schema_manager.generate_system_prompt(
         "Your sole purpose is to use the 'get_exchange_rate' tool to answer questions about currency exchange rates. "
         "If the user asks about anything other than currency conversion or exchange rates, "
         "politely state that you cannot help with that topic and can only assist with currency-related queries. "
-        "Do not attempt to answer unrelated questions or use tools for other purposes."
+        "Do not attempt to answer unrelated questions or use tools for other purposes. "
+        "CRITICAL: Always generate unique, randomized or counter-suffixed 'id' values for all UI components (e.g. 'card_usd_eur_8492') to prevent component collisions in multi-turn conversations."
     ),
     workflow_description="Use components to display structured currency conversions and rates.",
     ui_description="Use Card and Text components for displaying rates. Use Table components for tabular data. Use BarChart components or LineChart components when presenting exchange rate trends or histories over time.",

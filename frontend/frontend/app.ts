@@ -168,10 +168,70 @@ function getFormattedTime(): string {
     return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+function cleanPartialJson(str: string): string {
+    let inString = false;
+    let isEscaped = false;
+    const stack: string[] = [];
+
+    for (let i = 0; i < str.length; i++) {
+        const char = str[i];
+        if (isEscaped) {
+            isEscaped = false;
+            continue;
+        }
+        if (char === '\\') {
+            isEscaped = true;
+            continue;
+        }
+        if (char === '"') {
+            inString = !inString;
+            continue;
+        }
+        if (!inString) {
+            if (char === '{' || char === '[') {
+                stack.push(char);
+            } else if (char === '}') {
+                if (stack[stack.length - 1] === '{') {
+                    stack.pop();
+                }
+            } else if (char === ']') {
+                if (stack[stack.length - 1] === '[') {
+                    stack.pop();
+                }
+            }
+        }
+    }
+
+    let closedStr = str;
+    if (inString) {
+        closedStr += '"';
+    }
+
+    while (stack.length > 0) {
+        const lastOpen = stack.pop();
+        if (lastOpen === '{') {
+            closedStr = closedStr.trim();
+            if (closedStr.endsWith(',') || closedStr.endsWith(':')) {
+                closedStr = closedStr.slice(0, -1);
+            }
+            closedStr += '}';
+        } else if (lastOpen === '[') {
+            closedStr = closedStr.trim();
+            if (closedStr.endsWith(',')) {
+                closedStr = closedStr.slice(0, -1);
+            }
+            closedStr += ']';
+        }
+    }
+
+    return closedStr;
+}
+
 // Render A2UI JSON components to premium styled HTML elements
 function renderA2UI(jsonText: string): HTMLElement | null {
     try {
-        const parsed = JSON.parse(jsonText.trim());
+        const cleaned = cleanPartialJson(jsonText.trim());
+        const parsed = JSON.parse(cleaned);
         let components: any[] = [];
         if (Array.isArray(parsed)) {
             components = parsed;
@@ -298,6 +358,55 @@ function renderA2UI(jsonText: string): HTMLElement | null {
                     if (el) row.appendChild(el);
                 });
                 return row;
+            }
+
+            if (c.type === 'Button' || c.component === 'Button') {
+                const btn = document.createElement('button');
+                btn.style.padding = '8px 16px';
+                btn.style.borderRadius = '12px';
+                btn.style.fontSize = '0.75rem';
+                btn.style.fontWeight = '600';
+                btn.style.cursor = 'pointer';
+                btn.style.border = 'none';
+                btn.style.transition = 'all 0.2s';
+                
+                if (c.props && c.props.primary) {
+                    btn.style.backgroundColor = 'hsl(var(--primary))';
+                    btn.style.color = '#000';
+                    btn.style.boxShadow = '0 4px 12px rgba(var(--primary), 0.2)';
+                } else {
+                    btn.style.backgroundColor = 'hsl(var(--bg-sidebar))';
+                    btn.style.color = 'hsl(var(--text-main))';
+                    btn.style.border = '1px solid hsl(var(--border-color))';
+                }
+                
+                btn.addEventListener('mouseenter', () => {
+                    btn.style.filter = 'brightness(1.1)';
+                    btn.style.transform = 'translateY(-1px)';
+                });
+                btn.addEventListener('mouseleave', () => {
+                    btn.style.filter = 'brightness(1.0)';
+                    btn.style.transform = 'translateY(0)';
+                });
+
+                if (c.props && c.props.action) {
+                    btn.addEventListener('click', () => {
+                        const event = new CustomEvent("a2ui-action", { detail: c.props.action });
+                        window.dispatchEvent(event);
+                    });
+                }
+
+                if (c.child) {
+                    const childEl = renderElement(c.child);
+                    if (childEl) {
+                        btn.appendChild(childEl);
+                    }
+                } else if (c.props && c.props.label) {
+                    btn.textContent = c.props.label;
+                } else {
+                    btn.textContent = 'Action';
+                }
+                return btn;
             }
 
             if (c.type === 'BarChart' || c.component === 'BarChart') {
@@ -482,6 +591,8 @@ function renderA2UI(jsonText: string): HTMLElement | null {
                     areaD += ` L ${points[points.length - 1].x} ${height - padY} Z`;
                     areaPath.setAttribute('d', areaD);
                     areaPath.setAttribute('fill', `url(#${gradId})`);
+                    areaPath.setAttribute('class', 'a2ui-fade-in');
+                    areaPath.style.animationDelay = '1.2s';
                     svg.appendChild(areaPath);
 
                     // Actual Line
@@ -496,10 +607,15 @@ function renderA2UI(jsonText: string): HTMLElement | null {
                     linePath.setAttribute('fill', 'none');
                     linePath.setAttribute('stroke-linecap', 'round');
                     linePath.setAttribute('stroke-linejoin', 'round');
+                    linePath.setAttribute('class', 'a2ui-line-path-animate');
                     svg.appendChild(linePath);
 
                     // Data point circles & values
                     points.forEach((p, idx) => {
+                        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                        g.setAttribute('class', 'a2ui-fade-in');
+                        g.style.animationDelay = `${0.8 + idx * 0.15}s`;
+
                         const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                         circle.setAttribute('cx', `${p.x}`);
                         circle.setAttribute('cy', `${p.y}`);
@@ -511,7 +627,7 @@ function renderA2UI(jsonText: string): HTMLElement | null {
                         const titleEl = document.createElementNS('http://www.w3.org/2000/svg', 'title');
                         titleEl.textContent = `${labels[idx]}: ${values[idx]}`;
                         circle.appendChild(titleEl);
-                        svg.appendChild(circle);
+                        g.appendChild(circle);
 
                         // Axis label below
                         const lbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -522,7 +638,7 @@ function renderA2UI(jsonText: string): HTMLElement | null {
                         lbl.style.fontSize = '8px';
                         lbl.style.fontFamily = 'var(--font-outfit)';
                         lbl.textContent = labels[idx];
-                        svg.appendChild(lbl);
+                        g.appendChild(lbl);
 
                         // Value label above dot
                         const valLbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -534,7 +650,9 @@ function renderA2UI(jsonText: string): HTMLElement | null {
                         valLbl.style.fontWeight = '500';
                         valLbl.style.fontFamily = 'var(--font-outfit)';
                         valLbl.textContent = values[idx].toFixed(4);
-                        svg.appendChild(valLbl);
+                        g.appendChild(valLbl);
+
+                        svg.appendChild(g);
                     });
 
                     chartWrapper.appendChild(svg);
@@ -553,7 +671,7 @@ function renderA2UI(jsonText: string): HTMLElement | null {
         if (cards.length > 0) {
             cards.forEach(cardComp => {
                 const card = document.createElement('div');
-                card.className = 'a2ui-card';
+                card.className = 'a2ui-card a2ui-fade-in';
                 card.style.background = 'hsl(var(--bg-card))';
                 card.style.border = '1px solid hsl(var(--border-color))';
                 card.style.borderRadius = '8px';
@@ -583,6 +701,7 @@ function renderA2UI(jsonText: string): HTMLElement | null {
         if (tables.length > 0) {
             tables.forEach(tableComp => {
                 const tableContainer = document.createElement('div');
+                tableContainer.className = 'a2ui-fade-in';
                 tableContainer.style.background = 'hsl(var(--bg-card))';
                 tableContainer.style.border = '1px solid hsl(var(--border-color))';
                 tableContainer.style.borderRadius = '8px';
@@ -691,13 +810,20 @@ function appendMessage(role: 'user' | 'agent', text: string) {
     let a2uiContainer: HTMLElement | null = null;
     let cleanText = text;
     
-    // Regex to match the standard A2UI blocks
-    const a2uiRegex = /<a2ui-json>([\s\S]*?)<\/a2ui-json>/;
-    const match = text.match(a2uiRegex);
-    if (match) {
-        const jsonText = match[1];
-        a2uiContainer = renderA2UI(jsonText);
-        cleanText = text.replace(a2uiRegex, '').trim();
+    // Support parsing incomplete/streaming a2ui-json tags
+    const xmlStartIndex = text.indexOf("<a2ui-json>");
+    if (xmlStartIndex !== -1) {
+        cleanText = text.substring(0, xmlStartIndex);
+        let jsonText = "";
+        const xmlEndIndex = text.indexOf("</a2ui-json>");
+        if (xmlEndIndex !== -1) {
+            jsonText = text.substring(xmlStartIndex + 11, xmlEndIndex);
+        } else {
+            jsonText = text.substring(xmlStartIndex + 11);
+        }
+        if (jsonText.trim()) {
+            a2uiContainer = renderA2UI(jsonText);
+        }
     }
     
     // Parse markdown if it's from the agent
@@ -912,4 +1038,24 @@ fetchLiveRates();
 // Refresh rates listener
 refreshRatesBtn.addEventListener('click', () => {
     fetchLiveRates();
+});
+
+// Listen for interactive A2UI component clicks and submit them back to the chat loop
+window.addEventListener('a2ui-action', (e: any) => {
+    const action = e.detail;
+    if (action && action.name) {
+        let msg = '';
+        if (action.name === 'convert') {
+            msg = `Convert ${action.params?.amount || 1} ${action.params?.from || 'USD'} to ${action.params?.to || 'EUR'}`;
+        } else if (action.name === 'show_trends') {
+            msg = `Show exchange rate trends for ${action.params?.from || 'USD'} to ${action.params?.to || 'EUR'}`;
+        } else {
+            msg = `Run action: ${action.name}`;
+            if (action.params) {
+                msg += ` with params: ${JSON.stringify(action.params)}`;
+            }
+        }
+        chatInput.value = msg;
+        chatForm.dispatchEvent(new Event('submit'));
+    }
 });

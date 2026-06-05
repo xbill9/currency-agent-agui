@@ -58,6 +58,40 @@ function normalizeA2UIJson(parsed: any) {
     normalized.push(norm);
   });
 
+  // Resolve parent-child relationships using "child" or "children"
+  normalized.forEach((c: any) => {
+    if (c.child) {
+      const childId = c.child;
+      const childComp = normalized.find(x => x.id === childId);
+      if (childComp && childComp.parentId === undefined) {
+        childComp.parentId = c.id;
+      }
+    }
+    if (c.props?.child) {
+      const childId = c.props.child;
+      const childComp = normalized.find(x => x.id === childId);
+      if (childComp && childComp.parentId === undefined) {
+        childComp.parentId = c.id;
+      }
+    }
+    if (Array.isArray(c.children)) {
+      c.children.forEach((childId: any) => {
+        const childComp = normalized.find(x => x.id === childId);
+        if (childComp && childComp.parentId === undefined) {
+          childComp.parentId = c.id;
+        }
+      });
+    }
+    if (Array.isArray(c.props?.children)) {
+      c.props.children.forEach((childId: any) => {
+        const childComp = normalized.find(x => x.id === childId);
+        if (childComp && childComp.parentId === undefined) {
+          childComp.parentId = c.id;
+        }
+      });
+    }
+  });
+
   const result = {
     version: parsed.version || "0.9",
   } as any;
@@ -81,6 +115,65 @@ function normalizeA2UIJson(parsed: any) {
   return result;
 }
 
+function cleanPartialJson(str: string): string {
+  let inString = false;
+  let isEscaped = false;
+  const stack: string[] = [];
+
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    if (isEscaped) {
+      isEscaped = false;
+      continue;
+    }
+    if (char === '\\') {
+      isEscaped = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (!inString) {
+      if (char === '{' || char === '[') {
+        stack.push(char);
+      } else if (char === '}') {
+        if (stack[stack.length - 1] === '{') {
+          stack.pop();
+        }
+      } else if (char === ']') {
+        if (stack[stack.length - 1] === '[') {
+          stack.pop();
+        }
+      }
+    }
+  }
+
+  let closedStr = str;
+  if (inString) {
+    closedStr += '"';
+  }
+
+  while (stack.length > 0) {
+    const lastOpen = stack.pop();
+    if (lastOpen === '{') {
+      closedStr = closedStr.trim();
+      if (closedStr.endsWith(',') || closedStr.endsWith(':')) {
+        closedStr = closedStr.slice(0, -1);
+      }
+      closedStr += '}';
+    } else if (lastOpen === '[') {
+      closedStr = closedStr.trim();
+      if (closedStr.endsWith(',')) {
+        closedStr = closedStr.slice(0, -1);
+      }
+      closedStr += ']';
+    }
+  }
+
+  return closedStr;
+}
+
 function parseA2UIContent(text: string) {
   let cleanText = text;
   let jsonStr: string | null = null;
@@ -90,9 +183,11 @@ function parseA2UIContent(text: string) {
   const xmlStartIndex = text.indexOf("<a2ui-json>");
   if (xmlStartIndex !== -1) {
     cleanText = text.substring(0, xmlStartIndex);
-    const xmlMatch = text.match(/<a2ui-json>([\s\S]*?)<\/a2ui-json>/);
-    if (xmlMatch) {
-      jsonStr = xmlMatch[1];
+    const xmlEndIndex = text.indexOf("</a2ui-json>");
+    if (xmlEndIndex !== -1) {
+      jsonStr = text.substring(xmlStartIndex + 11, xmlEndIndex);
+    } else {
+      jsonStr = text.substring(xmlStartIndex + 11);
     }
   } else {
     // Check if there is a raw JSON block starting with { and containing "version": "v0.9"
@@ -102,6 +197,8 @@ function parseA2UIContent(text: string) {
       const jsonMatch = text.match(/(\{[\s\S]*?"version"\s*:\s*"v0.9"[\s\S]*?\})/);
       if (jsonMatch) {
         jsonStr = jsonMatch[1];
+      } else {
+        jsonStr = text.substring(jsonStartIndex);
       }
     }
   }
@@ -109,7 +206,8 @@ function parseA2UIContent(text: string) {
   let parsed: any = null;
   if (jsonStr) {
     try {
-      const rawParsed = JSON.parse(jsonStr.trim());
+      const cleaned = cleanPartialJson(jsonStr.trim());
+      const rawParsed = JSON.parse(cleaned);
       parsed = normalizeA2UIJson(rawParsed);
       if (parsed.updateComponents?.surfaceId) {
         surfaceId = parsed.updateComponents.surfaceId;
@@ -127,9 +225,16 @@ function parseA2UIContent(text: string) {
 
 const A2UIContainer = ({ parsedJson, surfaceId }: { parsedJson: any; surfaceId: string }) => {
   const { processMessages, getSurface } = useA2UI();
+  const lastProcessedRef = React.useRef<string>("");
 
   useEffect(() => {
     if (parsedJson) {
+      const serialized = JSON.stringify(parsedJson);
+      if (serialized === lastProcessedRef.current) {
+        return;
+      }
+      lastProcessedRef.current = serialized;
+
       const messagesToProcess = [];
       // Synthesize createSurface if the surface does not exist yet in A2UI store
       if (parsedJson.updateComponents && surfaceId && !getSurface(surfaceId)) {
@@ -155,7 +260,10 @@ const A2UIContainer = ({ parsedJson, surfaceId }: { parsedJson: any; surfaceId: 
 
 
 const CustomMarkdownRenderer = ({ content, ...props }: any) => {
-  const { cleanText, parsed, surfaceId } = parseA2UIContent(content);
+  const { cleanText, parsed, surfaceId } = React.useMemo(
+    () => parseA2UIContent(content),
+    [content]
+  );
   return (
     <div className="flex flex-col gap-2 w-full">
       <CopilotChatAssistantMessage.MarkdownRenderer
@@ -191,6 +299,46 @@ const Sidebar = CopilotSidebar as any;
 
 export default function CopilotKitPage() {
   const [themeColor, setThemeColor] = useState("#10b981"); // Mint green primary theme
+
+  useEffect(() => {
+    const handleAction = (e: any) => {
+      const action = e.detail;
+      console.log("React A2UI Action received:", action);
+      if (action && action.name) {
+        let msg = "";
+        if (action.name === 'convert') {
+          msg = `Convert ${action.params?.amount || 1} ${action.params?.from || 'USD'} to ${action.params?.to || 'EUR'}`;
+        } else if (action.name === 'show_trends') {
+          msg = `Show exchange rate trends for ${action.params?.from || 'USD'} to ${action.params?.to || 'EUR'}`;
+        } else {
+          msg = `Run action: ${action.name}`;
+        }
+
+        const textarea = document.querySelector("textarea") as HTMLTextAreaElement;
+        if (textarea) {
+          textarea.value = msg;
+          textarea.dispatchEvent(new Event("input", { bubbles: true }));
+          setTimeout(() => {
+            const submitBtn = document.querySelector("button[type='submit']") as HTMLButtonElement;
+            if (submitBtn) {
+              submitBtn.click();
+            } else {
+              const enterEvent = new KeyboardEvent("keydown", {
+                key: "Enter",
+                code: "Enter",
+                keyCode: 13,
+                which: 13,
+                bubbles: true
+              });
+              textarea.dispatchEvent(enterEvent);
+            }
+          }, 150);
+        }
+      }
+    };
+    window.addEventListener("a2ui-action", handleAction);
+    return () => window.removeEventListener("a2ui-action", handleAction);
+  }, []);
 
   // 🪁 Frontend Actions
   useFrontendTool({

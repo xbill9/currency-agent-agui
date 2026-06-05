@@ -63,8 +63,12 @@ def test_servers_health():
 
     try:
         r = httpx.get("http://localhost:8008/health", timeout=5.0)
-        assert r.status_code == 200, f"React Agent returned unexpected response: {r.status_code}"
-        assert r.json().get("status") == "ok", f"React Agent returned unexpected status: {r.json()}"
+        assert r.status_code == 200, (
+            f"React Agent returned unexpected response: {r.status_code}"
+        )
+        assert r.json().get("status") == "ok", (
+            f"React Agent returned unexpected status: {r.json()}"
+        )
         print_success("React Agent on port 8008 is healthy.")
     except Exception as e:
         print_failure("Failed to connect to React Agent on port 8008", str(e))
@@ -78,7 +82,9 @@ def test_servers_health():
     try:
         # Next.js API route is compiled faster and is more lightweight to check than full React HTML bundle
         r = httpx.get("http://localhost:3000/api/copilotkit", timeout=15.0)
-        assert r.status_code in [200, 304, 404, 405], f"React UI Server returned unexpected HTTP status {r.status_code}"
+        assert r.status_code in [200, 304, 404, 405], (
+            f"React UI Server returned unexpected HTTP status {r.status_code}"
+        )
         print_success("React UI Server on port 3000 is healthy and reachable.")
     except Exception as e:
         print_failure("Failed to connect to React UI Server on port 3000", str(e))
@@ -153,11 +159,15 @@ def test_copilot_endpoint_flow():
                 except json.JSONDecodeError:
                     continue
 
-        assert not errors, f"Agent reported stream execution error(s): {', '.join(errors)}"
+        assert not errors, (
+            f"Agent reported stream execution error(s): {', '.join(errors)}"
+        )
         assert has_started, "Stream completed but RUN_STARTED event was missing"
         print_success("SSE Stream completed successfully.")
 
-        assert tool_called, "Stream completed but get_exchange_rate tool was never executed"
+        assert tool_called, (
+            "Stream completed but get_exchange_rate tool was never executed"
+        )
         print_success("The agent successfully invoked a tool during execution.")
 
         assert final_text, "Agent returned empty response text."
